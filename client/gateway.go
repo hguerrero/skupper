@@ -523,6 +523,15 @@ func stopGatewayUserService(unitDir, gatewayName string) error {
 }
 
 func updateLocalGatewayConfig(gatewayDir string, gatewayType string, gatewayConfig qdr.RouterConfig) error {
+	// Use current listener data
+	adminUrl, _ := getRouterUrl(gatewayDir)
+	adminPort := strings.Split(adminUrl, ":")
+	freePort, _ := strconv.ParseInt(adminPort[len(adminPort)-1], 10, 64)
+	gatewayConfig.Listeners["amqp"] = qdr.Listener{
+		Name: "amqp",
+		Host: "0.0.0.0",
+		Port: int32(freePort),
+	}
 	mc, err := qdr.MarshalRouterConfig(gatewayConfig)
 	if err != nil {
 		return fmt.Errorf("Failed to marshall router config: %w", err)
