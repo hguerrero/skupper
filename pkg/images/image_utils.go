@@ -1,7 +1,9 @@
 package images
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/skupperproject/skupper/api/types"
@@ -11,11 +13,13 @@ import (
 const (
 	RouterImageEnvKey                 string = "QDROUTERD_IMAGE"
 	ServiceControllerImageEnvKey      string = "SKUPPER_SERVICE_CONTROLLER_IMAGE"
+	ControllerPodmanImageEnvKey       string = "SKUPPER_CONTROLLER_PODMAN_IMAGE"
 	ConfigSyncImageEnvKey             string = "SKUPPER_CONFIG_SYNC_IMAGE"
 	FlowCollectorImageEnvKey          string = "SKUPPER_FLOW_COLLECTOR_IMAGE"
 	PrometheusServerImageEnvKey       string = "PROMETHEUS_SERVER_IMAGE"
 	RouterPullPolicyEnvKey            string = "QDROUTERD_IMAGE_PULL_POLICY"
 	ServiceControllerPullPolicyEnvKey string = "SKUPPER_SERVICE_CONTROLLER_IMAGE_PULL_POLICY"
+	ControllerPodmanPullPolicyEnvKey  string = "SKUPPER_CONTROLLER_PODMAN_IMAGE_PULL_POLICY"
 	ConfigSyncPullPolicyEnvKey        string = "SKUPPER_CONFIG_SYNC_IMAGE_PULL_POLICY"
 	FlowCollectorPullPolicyEnvKey     string = "SKUPPER_FLOW_COLLECTOR_IMAGE_PULL_POLICY"
 	PrometheusServerPullPolicyEnvKey  string = "PROMETHEUS_SERVER_IMAGE_PULL_POLICY"
@@ -84,6 +88,27 @@ func GetServiceControllerImageDetails() types.ImageDetails {
 	return types.ImageDetails{
 		Name:       GetServiceControllerImageName(),
 		PullPolicy: GetServiceControllerImagePullPolicy(),
+	}
+}
+
+func GetControllerPodmanImageName() string {
+	image := os.Getenv(ControllerPodmanImageEnvKey)
+	if image == "" {
+		imageRegistry := GetImageRegistry()
+		return strings.Join([]string{imageRegistry, ControllerPodmanImageName}, "/")
+	} else {
+		return image
+	}
+}
+
+func GetControllerPodmanImagePullPolicy() string {
+	return getPullPolicy(ControllerPodmanPullPolicyEnvKey)
+}
+
+func GetControllerPodmanImageDetails() types.ImageDetails {
+	return types.ImageDetails{
+		Name:       GetControllerPodmanImageName(),
+		PullPolicy: GetControllerPodmanImagePullPolicy(),
 	}
 }
 
@@ -164,4 +189,34 @@ func GetPrometheusImageRegistry() string {
 		return PrometheusImageRegistry
 	}
 	return imageRegistry
+}
+
+func GetSiteControllerImageName() string {
+	imageRegistry := GetImageRegistry()
+	return strings.Join([]string{imageRegistry, SiteControllerImageName}, "/")
+}
+
+func GetSha(imageName string) string {
+	// Pull the image
+	pullCmd := exec.Command("docker", "pull", imageName)
+	if err := pullCmd.Run(); err != nil {
+		fmt.Printf("Error pulling image: %v", err)
+		return err.Error()
+	}
+
+	// Get the image digest
+	digestCmd := exec.Command("docker", "inspect", "--format='{{index .RepoDigests 0}}'", imageName)
+	digestBytes, err := digestCmd.Output()
+	if err != nil {
+		fmt.Printf("Error getting image digest: %v", err)
+		return err.Error()
+	}
+
+	imageWithoutTag := strings.Split(imageName, ":")[0]
+
+	// Extract and print the digest
+	parsedDigest := strings.ReplaceAll(strings.ReplaceAll(string(digestBytes), "'", ""), "\n", "")
+	digest := strings.TrimPrefix(strings.Trim(parsedDigest, "'"), imageWithoutTag+"@")
+
+	return digest
 }
